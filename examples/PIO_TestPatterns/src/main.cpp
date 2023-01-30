@@ -7,6 +7,7 @@
 #include <freertos/task.h>
 #include <driver/gpio.h>
 #include "sdkconfig.h"
+#include <Serial.h>
 #endif
 
 #include <Arduino.h>
