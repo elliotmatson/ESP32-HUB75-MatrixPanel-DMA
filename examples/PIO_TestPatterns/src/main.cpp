@@ -6,7 +6,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <driver/gpio.h>
-#include <Serial.h>
+#include <Arduino.h>
 #include "sdkconfig.h"
 #endif
 
