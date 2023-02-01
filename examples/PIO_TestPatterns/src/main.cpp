@@ -8,6 +8,7 @@
 #include <driver/gpio.h>
 #include <HardwareSerial.h>
 #include "sdkconfig.h"
+#include "USB.h"
 #endif
 
 #include <Arduino.h>
