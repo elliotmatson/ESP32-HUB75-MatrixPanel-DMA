@@ -597,6 +597,22 @@ public:
   void fillScreenRGB888(uint8_t r, uint8_t g, uint8_t b);
   void drawPixelRGB888(int16_t x, int16_t y, uint8_t r, uint8_t g, uint8_t b);
 
+  /**
+   * @brief Writes a run of pixels along one row from packed RGB888 data
+   * (3 bytes per pixel: r, g, b), equivalent to calling drawPixelRGB888()
+   * for each but much faster: each colour-depth bit plane's row pointer is
+   * looked up once per run rather than once per pixel.
+   *
+   * Pixels outside the matrix are skipped. With a GFX rotation set, a run
+   * along x is no longer a run in the DMA buffer, so this falls back to
+   * per-pixel writes.
+   *
+   * @param x, y  First pixel of the run
+   * @param rgb   count * 3 bytes
+   * @param count Number of pixels
+   */
+  void drawRowRGB888(int16_t x, int16_t y, const uint8_t *rgb, uint16_t count);
+
 #ifdef USE_GFX_LITE
   // 24bpp FASTLED CRGB colour struct support
   void fillScreen(CRGB color);

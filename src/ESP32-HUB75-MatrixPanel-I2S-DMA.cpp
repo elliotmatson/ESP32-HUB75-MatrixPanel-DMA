@@ -464,6 +464,89 @@ void IRAM_ATTR MatrixPanel_I2S_DMA::updateMatrixDMABuffer(uint16_t x_coord, uint
 } // updateMatrixDMABuffer (specific co-ords change)
 
 
+/* Write a run of RGB888 pixels along one row -- drawPixelRGB888() in bulk */
+void IRAM_ATTR MatrixPanel_I2S_DMA::drawRowRGB888(int16_t x, int16_t y, const uint8_t *rgb, uint16_t count)
+{
+  if (!initialized || rgb == nullptr)
+    return;
+
+#ifndef NO_GFX
+  if (rotation != 0)
+  {
+    for (uint16_t i = 0; i < count; i++, rgb += 3)
+      drawPixelRGB888(x + i, y, rgb[0], rgb[1], rgb[2]);
+    return;
+  }
+#endif
+
+  // Clip the run to the matrix
+  if (y < 0 || y >= m_cfg.mx_height)
+    return;
+  if (x < 0)
+  {
+    if (-x >= count)
+      return;
+    rgb += (size_t)(-x) * 3;
+    count -= -x;
+    x = 0;
+  }
+  if (x >= PIXELS_PER_ROW)
+    return;
+  if (x + count > PIXELS_PER_ROW)
+    count = PIXELS_PER_ROW - x;
+
+  uint16_t y_coord = y;
+  uint16_t _colourbitclear = BITMASK_RGB1_CLEAR, _colourbitoffset = 0;
+  if (y_coord >= ROWS_PER_FRAME)
+  { // bottom half of a two-scan panel shares the DMA row with the top half
+    _colourbitoffset = BITS_RGB2_OFFSET;
+    _colourbitclear = BITMASK_RGB2_CLEAR;
+    y_coord -= ROWS_PER_FRAME;
+  }
+
+  const uint8_t depth = m_cfg.getPixelColorDepthBits();
+
+  // Brightness-compensated values for a chunk of the run, then one pass per
+  // bit plane over that chunk. Chunked so the scratch stays on the stack.
+  const uint16_t CHUNK = 64;
+  uint16_t cr[CHUNK], cg[CHUNK], cb[CHUNK];
+
+  while (count)
+  {
+    const uint16_t n = count < CHUNK ? count : CHUNK;
+    for (uint16_t i = 0; i < n; i++)
+    {
+      const uint8_t red = rgb[i * 3], green = rgb[i * 3 + 1], blue = rgb[i * 3 + 2];
+      DO_BRIGHTNESS_COMPENSATION()
+      cr[i] = red_val;
+      cg[i] = green_val;
+      cb[i] = blue_val;
+    }
+
+    for (uint8_t colour_depth_idx = 0; colour_depth_idx < depth; colour_depth_idx++)
+    {
+      ESP32_I2S_DMA_STORAGE_TYPE *p = getRowDataPtr(y_coord, colour_depth_idx);
+      for (uint16_t i = 0; i < n; i++)
+      {
+        /* Per the .h file, the order of the output RGB bits is:
+         * BIT_B2, BIT_G2, BIT_R2,    BIT_B1, BIT_G1, BIT_R1     */
+        uint16_t RGB_output_bits = (((cb[i] >> colour_depth_idx) & 1) << 2) |
+                                   (((cg[i] >> colour_depth_idx) & 1) << 1) |
+                                   ((cr[i] >> colour_depth_idx) & 1);
+        const uint16_t xi = ESP32_TX_FIFO_POSITION_ADJUST(x + i);
+        p[xi] = (p[xi] & _colourbitclear) | (RGB_output_bits << _colourbitoffset);
+      }
+#if defined(SPIRAM_DMA_BUFFER)
+      Cache_WriteBack_Addr((uint32_t)&p[x], n * sizeof(ESP32_I2S_DMA_STORAGE_TYPE));
+#endif
+    }
+
+    x += n;
+    rgb += n * 3;
+    count -= n;
+  }
+}
+
 /* Update the entire buffer with a single specific colour - quicker */
 void MatrixPanel_I2S_DMA::updateMatrixDMABuffer(uint8_t red, uint8_t green, uint8_t blue)
 {
